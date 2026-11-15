@@ -11,7 +11,7 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -22,6 +22,8 @@ DATA = Path(os.environ.get("STEM_SPLITTER_DATA", ROOT / "data"))
 MAX_MB = int(os.environ.get("STEM_SPLITTER_MAX_MB", "1024"))
 TTL = int(os.environ.get("STEM_SPLITTER_TTL_HOURS", "24")) * 3600
 DATA.mkdir(parents=True, exist_ok=True)
+UPLOADS = DATA / "_uploads"
+UPLOADS.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Stem Splitter")
 executor = ThreadPoolExecutor(max_workers=int(os.environ.get("STEM_SPLITTER_WORKERS", "1")))
@@ -90,6 +92,9 @@ def _cleanup_loop():
             if now - job["created"] > TTL and job["status"] in ("done", "error"):
                 shutil.rmtree(DATA / job_id, ignore_errors=True)
                 jobs.pop(job_id, None)
+        for f in UPLOADS.iterdir():
+            if now - f.stat().st_mtime > 6 * 3600:
+                f.unlink(missing_ok=True)
         time.sleep(600)
 
 
@@ -101,25 +106,55 @@ def options():
     return {"models": {k: v["label"] for k, v in MODELS.items()}, "formats": list(FORMATS), "max_mb": MAX_MB}
 
 
+def _upload_path(upload_id: str) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{32}", upload_id):
+        raise HTTPException(400, "Неверный id загрузки")
+    return UPLOADS / upload_id
+
+
+@app.post("/api/uploads")
+def create_upload():
+    """Начать загрузку файла по частям (большие файлы через прокси обрываются одним запросом)."""
+    upload_id = uuid.uuid4().hex
+    _upload_path(upload_id).touch()
+    return {"upload_id": upload_id, "chunk_mb": 4}
+
+
+@app.put("/api/uploads/{upload_id}")
+async def put_chunk(upload_id: str, request: Request, offset: int = 0):
+    """Дописать часть файла. offset должен совпадать с текущим размером (повтор той же части — безопасен)."""
+    path = _upload_path(upload_id)
+    if not path.exists():
+        raise HTTPException(404, "Загрузка не найдена")
+    size = path.stat().st_size
+    if offset > size:
+        raise HTTPException(409, f"Ожидался offset {size}")
+    data = await request.body()
+    if offset + len(data) > MAX_MB << 20:
+        path.unlink(missing_ok=True)
+        raise HTTPException(413, f"Файл больше {MAX_MB} МБ")
+    with open(path, "r+b") as f:
+        f.seek(offset)
+        f.write(data)
+        f.truncate(offset + len(data))
+    return {"size": offset + len(data)}
+
+
 @app.post("/api/jobs")
-async def create_job(file: UploadFile = File(...), model: str = Form("htdemucs")):
+async def create_job(upload_id: str = Form(...), filename: str = Form("track"), model: str = Form("htdemucs")):
     if model not in MODELS:
         raise HTTPException(400, "Неизвестная модель")
+    src = _upload_path(upload_id)
+    if not src.exists() or src.stat().st_size == 0:
+        raise HTTPException(400, "Файл не загружен")
     job_id = uuid.uuid4().hex
     jdir = DATA / job_id
     jdir.mkdir(parents=True)
-    upload = "upload" + Path(file.filename or "").suffix.lower()[:10]
-    size = 0
-    with open(jdir / upload, "wb") as f:
-        while chunk := await file.read(1 << 20):
-            size += len(chunk)
-            if size > MAX_MB << 20:
-                f.close()
-                shutil.rmtree(jdir, ignore_errors=True)
-                raise HTTPException(413, f"Файл больше {MAX_MB} МБ")
-            f.write(chunk)
-    jobs[job_id] = {"id": job_id, "name": _safe_name(file.filename), "model": model, "upload": upload,
-                    "status": "queued", "progress": 0, "stems": [], "error": None, "has_video": False, "created": time.time()}
+    upload = "upload" + Path(filename).suffix.lower()[:10]
+    shutil.move(str(src), jdir / upload)
+    jobs[job_id] = {"id": job_id, "name": _safe_name(filename), "model": model, "upload": upload,
+                    "status": "queued", "progress": 0, "stems": [], "error": None, "has_video": False,
+                    "created": time.time()}
     executor.submit(_run, job_id)
     return _public(jobs[job_id])
 

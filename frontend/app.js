@@ -2,6 +2,15 @@ const $ = (id) => document.getElementById(id);
 const STEM_LABELS = { original: "Весь звук", vocals: "Вокал", drums: "Барабаны", bass: "Бас", other: "Прочее",
   guitar: "Гитара", piano: "Пианино", no_vocals: "Минус" };
 
+const ICONS = {
+  play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>',
+  pause: '<svg viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="13.5" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>',
+  download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14"/></svg>',
+  speaker: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+  muted: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>',
+  solo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3.5" y="14" width="4" height="6" rx="1.5" fill="currentColor"/><rect x="16.5" y="14" width="4" height="6" rx="1.5" fill="currentColor"/></svg>',
+};
+
 let file = null, job = null;
 let ctx = null, tracks = [], duration = 0, playing = false, startAt = 0, offset = 0, raf = 0;
 
@@ -31,6 +40,26 @@ async function init() {
   });
 }
 
+// iOS/iPadOS: без этого Safari глушит Web Audio при беззвучном режиме
+let silentEl = null;
+function unlockAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {}
+  ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state !== "running") ctx.resume();
+  if (!silentEl) {
+    // тихий HTML-звук переключает старые iOS в режим «воспроизведение»
+    const sr = 8000, n = sr / 2, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    const w = (o, str) => [...str].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+    w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+    silentEl = new Audio(URL.createObjectURL(new Blob([buf], { type: "audio/wav" })));
+    silentEl.loop = true;
+    silentEl.setAttribute("playsinline", "");
+  }
+  silentEl.play().catch(() => {});
+}
+
 function pick(f) {
   if (!f) return;
   file = f;
@@ -45,11 +74,14 @@ async function start() {
   $("upload").classList.add("hidden");
   $("progress").classList.remove("hidden");
   setProgress("Загрузка файла…", 0);
-  const fd = new FormData();
-  fd.append("file", file);
-  fd.append("model", $("model").value);
+  unlockAudio();
   try {
-    job = await upload(fd);
+    const uploadId = await uploadChunked(file);
+    const fd = new FormData();
+    fd.append("upload_id", uploadId);
+    fd.append("filename", file.name);
+    fd.append("model", $("model").value);
+    job = await api("api/jobs", { method: "POST", body: fd });
     while (job.status === "queued" || job.status === "processing") {
       setProgress(job.status === "queued" ? "В очереди…" : `Разделение… ${Math.floor(job.progress)}%`, job.progress);
       await new Promise((r) => setTimeout(r, 1000));
@@ -67,24 +99,41 @@ async function start() {
   }
 }
 
-function upload(fd) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", "api/jobs");
-    xhr.upload.onprogress = (e) => e.lengthComputable && setProgress(`Загрузка файла… ${Math.round(e.loaded / e.total * 100)}%`, e.loaded / e.total * 100);
-    xhr.onload = () => {
-      let body; try { body = JSON.parse(xhr.responseText); } catch { body = {}; }
-      xhr.status < 300 ? resolve(body) : reject(new Error(body.detail || `Ошибка ${xhr.status}`));
-    };
-    xhr.onerror = () => reject(new Error("Сеть недоступна"));
-    xhr.send(fd);
-  });
+async function api(url, opts = {}) {
+  const r = await fetch(url, opts);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(body.detail || `Ошибка сервера ${r.status}`), { status: r.status });
+  return body;
+}
+
+// Загрузка частями по 4 МБ с повторами: большие файлы одним запросом рвутся на прокси
+async function uploadChunked(f) {
+  const { upload_id, chunk_mb } = await api("api/uploads", { method: "POST" });
+  const size = chunk_mb * 1024 * 1024;
+  const mb = (b) => (b / 1048576).toFixed(1);
+  for (let off = 0; off < f.size; off += size) {
+    const part = f.slice(off, off + size);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await api(`api/uploads/${upload_id}?offset=${off}`, { method: "PUT", body: part });
+        break;
+      } catch (e) {
+        if (e.status && e.status < 500 && e.status !== 408 && e.status !== 429) throw e;
+        if (attempt >= 5) throw new Error("Не удалось загрузить файл: соединение обрывается. Попробуйте ещё раз.");
+        setProgress(`Обрыв связи, повтор ${attempt}/4…`, (off / f.size) * 100);
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+      }
+    }
+    const done = Math.min(f.size, off + size);
+    setProgress(`Загрузка файла… ${mb(done)} из ${mb(f.size)} МБ`, (done / f.size) * 100);
+  }
+  return upload_id;
 }
 
 function setProgress(text, pct) { $("status").textContent = text; $("bar-fill").style.width = `${pct}%`; }
 
 async function loadStems() {
-  ctx = ctx || new AudioContext();
+  ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
   $("track-name").textContent = job.name;
   $("stems").innerHTML = "";
   tracks = await Promise.all(job.stems.map(async (name) => {
@@ -116,20 +165,25 @@ function renderStem(t) {
   const row = document.createElement("div");
   row.className = "stem";
   row.innerHTML = `
+    <button class="icon solo-play" title="Слушать только этот стем">${ICONS.play}</button>
     <div class="name">${STEM_LABELS[t.name] || t.name}</div>
     <div class="btns">
-      <button class="toggle mute" title="Mute">M</button>
-      <button class="toggle solo" title="Solo">S</button>
+      <button class="icon toggle mute" title="Выключить звук стема">${ICONS.speaker}</button>
+      <button class="icon toggle solo" title="Соло (можно несколько)">${ICONS.solo}</button>
     </div>
-    <canvas></canvas>
+    <canvas title="Нажмите, чтобы перемотать"></canvas>
     <div class="side">
       <input type="range" min="0" max="1.5" step="0.01" value="1" title="Громкость">
-      <select>${[...$("format").options].map((o) => `<option value="${o.value}">${o.text}</option>`).join("")}</select>
-      <button class="dl" title="Скачать">⬇</button>
+      <select title="Формат файла">${[...$("format").options].map((o) => `<option value="${o.value}">${o.text}</option>`).join("")}</select>
+      <button class="icon dl" title="Скачать стем">${ICONS.download}</button>
     </div>`;
-  const [muteBtn, soloBtn] = row.querySelectorAll(".toggle");
-  muteBtn.onclick = () => { t.mute = !t.mute; muteBtn.classList.toggle("on", t.mute); applyGains(); };
-  soloBtn.onclick = () => { t.solo = !t.solo; soloBtn.classList.toggle("on", t.solo); applyGains(); };
+  t.row = row;
+  t.muteBtn = row.querySelector(".mute");
+  t.soloBtn = row.querySelector(".solo");
+  t.playBtn = row.querySelector(".solo-play");
+  t.muteBtn.onclick = () => { t.mute = !t.mute; applyGains(); };
+  t.soloBtn.onclick = () => { t.solo = !t.solo; applyGains(); };
+  t.playBtn.onclick = () => playOnly(t);
   row.querySelector("input").oninput = (e) => { t.volume = +e.target.value; applyGains(); };
   const sel = row.querySelector("select");
   sel.value = $("format").value;
@@ -143,12 +197,43 @@ function renderStem(t) {
   requestAnimationFrame(() => drawWave(t));
 }
 
+// ▶ у стема: играет только его; повторное нажатие — пауза и снова все стемы
+function playOnly(t) {
+  const only = t.solo && tracks.every((x) => x === t || !x.solo);
+  if (only && playing) {
+    pause();
+    tracks.forEach((x) => (x.solo = false));
+    applyGains();
+    return;
+  }
+  tracks.forEach((x) => (x.solo = x === t));
+  if (t.mute) t.mute = false;
+  applyGains();
+  if (!playing) play();
+}
+
+function updateStemUI() {
+  const anySolo = tracks.some((t) => t.solo);
+  const only = tracks.filter((t) => t.solo).length === 1;
+  for (const t of tracks) {
+    const audible = !t.mute && (!anySolo || t.solo);
+    t.muteBtn.classList.toggle("on", t.mute);
+    t.muteBtn.innerHTML = t.mute ? ICONS.muted : ICONS.speaker;
+    t.soloBtn.classList.toggle("on", t.solo);
+    t.row.classList.toggle("silent", !audible);
+    const active = only && t.solo && playing;
+    t.playBtn.classList.toggle("on", active);
+    t.playBtn.innerHTML = active ? ICONS.pause : ICONS.play;
+  }
+}
+
 function applyGains() {
   const anySolo = tracks.some((t) => t.solo);
   for (const t of tracks) {
     const audible = !t.mute && (!anySolo || t.solo);
     t.gain.gain.setTargetAtTime(audible ? t.volume : 0, ctx.currentTime, 0.01);
   }
+  updateStemUI();
 }
 
 function drawWave(t) {
@@ -176,7 +261,7 @@ function drawWave(t) {
 function currentTime() { return playing ? Math.min(duration, ctx.currentTime - startAt) : offset; }
 
 function play() {
-  if (ctx.state === "suspended") ctx.resume();
+  unlockAudio();
   if (offset >= duration) offset = 0;
   startAt = ctx.currentTime - offset;
   for (const t of tracks) {
@@ -188,7 +273,8 @@ function play() {
   applyGains();
   playing = true;
   if (job.has_video) { $("video").currentTime = offset; $("video").play().catch(() => {}); }
-  $("play").textContent = "⏸";
+  $("play").innerHTML = ICONS.pause;
+  updateStemUI();
   tick();
 }
 
@@ -199,7 +285,9 @@ function pause() {
   stopSources();
   playing = false;
   if (job?.has_video) $("video").pause();
-  $("play").textContent = "▶";
+  $("play").innerHTML = ICONS.play;
+  silentEl?.pause();
+  updateStemUI();
   cancelAnimationFrame(raf);
   redraw();
 }

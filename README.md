@@ -15,7 +15,7 @@ pinned: false
 - Загрузка любого аудио (mp3, wav, flac, ogg, m4a…) **или видео** (mp4, mov, mkv, webm, avi…) — drag & drop
 - Модели: 4 стема, 4 стема HQ, 6 стемов, вокал/минус, а также режим **«только извлечь звук»** (без разделения, мгновенно)
 - Кнопка «Скачать исходный звук» — вся звуковая дорожка в выбранном формате
-- Встроенный мультитрек-плеер: синхронное воспроизведение, Mute/Solo, громкость, волновые формы, перемотка (пробел — play/pause)
+- Встроенный мультитрек-плеер: синхронное воспроизведение, кнопка ▶ «слушать только этот стем», выключение/соло, громкость, волновые формы, перемотка (пробел — play/pause)
 - Для видео: превью синхронно с плеером и экспорт **MP4 со звуком из выбранных стемов** (учитывает Mute/Solo и громкость; например, видео без вокала)
 - Скачивание каждого стема или всех сразу (ZIP) в **WAV, FLAC, MP3 320, OGG, M4A**
 
@@ -24,6 +24,7 @@ pinned: false
 [![Открыть в Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/djPtrvch/Stem-splitter?quickstart=1&ref=claude%2Fnice-ptolemy-i2vz94)
 
 Нажмите кнопку → **Create codespace** (в следующие разы — **Resume**). Сервер запустится сам, приложение откроется в новой вкладке.
+Обновить код в уже созданном Codespace: в терминале `git pull && bash .devcontainer/update.sh`.
 Если вкладка не открылась: внизу вкладка **PORTS** → строка *Stem Splitter (8000)* → иконка 🌐.
 
 - Первый запуск ~5 минут (установка PyTorch и модели), дальше — ~30 секунд.
@@ -81,7 +82,8 @@ frontend/             HTML/CSS/JS: загрузка, плеер, экспорт
 ## API
 
 - `GET /api/options` — модели и форматы
-- `POST /api/jobs` (multipart: `file`, `model`) — создать задачу
+- `POST /api/uploads` → `upload_id`; `PUT /api/uploads/{upload_id}?offset=N` (тело — часть файла) — загрузка по частям
+- `POST /api/jobs` (form: `upload_id`, `filename`, `model`) — создать задачу
 - `GET /api/jobs/{id}` — статус и прогресс
 - `GET /api/jobs/{id}/stems/{stem}?format=mp3&download=true` — стем
 - `GET /api/jobs/{id}/zip?format=flac` — все стемы архивом
