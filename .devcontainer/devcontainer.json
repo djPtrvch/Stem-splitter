@@ -1,11 +1,10 @@
 {
   "name": "Stem Splitter",
-  "image": "mcr.microsoft.com/devcontainers/python:3.12",
-  "hostRequirements": { "cpus": 2, "memory": "8gb" },
-  // один раз при создании: ffmpeg, PyTorch (CPU), Demucs и веса модели
-  "onCreateCommand": "bash .devcontainer/setup.sh",
-  // при каждом пробуждении: запускаем сервер в фоне
-  "postStartCommand": "bash .devcontainer/start.sh",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  // установка зависимостей; ошибки не ломают создание Codespace (повтор при старте)
+  "onCreateCommand": "bash .devcontainer/setup.sh || true",
+  // при каждом пробуждении: доустановить недостающее и запустить сервер в фоне
+  "postStartCommand": "bash .devcontainer/start.sh || true",
   "forwardPorts": [8000],
   "portsAttributes": {
     "8000": { "label": "Stem Splitter", "onAutoForward": "openBrowser" }

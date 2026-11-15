@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Запуск сервера в фоне (вызывается при каждом старте/пробуждении Codespace).
 cd "$(dirname "$0")/.."
+if [ ! -f "$HOME/.stem-setup-done" ] || ! command -v ffmpeg > /dev/null \
+   || ! python -c "import demucs, fastapi" 2>/dev/null; then
+  echo "Устанавливаю зависимости (несколько минут)…"
+  bash .devcontainer/setup.sh
+fi
 PIDFILE=/tmp/stem-splitter.pid
 if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
   if curl -sf http://localhost:8000/api/options > /dev/null; then echo "Stem Splitter уже запущен"; exit 0; fi
