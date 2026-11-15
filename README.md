@@ -1,3 +1,13 @@
+---
+title: Stem Splitter
+emoji: 🎚️
+colorFrom: indigo
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Stem Splitter
 
 Веб-приложение для разделения трека на стемы (вокал, барабаны, бас, гитара, пианино, прочее) на базе [Demucs](https://github.com/adefossez/demucs).
@@ -13,10 +23,19 @@
 
 ```bash
 docker build -t stem-splitter .
-docker run -p 8000:8000 -v stems-data:/data stem-splitter
+docker run -p 8000:8000 -e PORT=8000 stem-splitter
 ```
 
 Открыть http://localhost:8000
+
+## Публикация на Hugging Face Spaces (бесплатно, можно с iPad)
+
+1. Создать Space на huggingface.co → New Space → SDK: **Docker**, Blank.
+2. Создать токен: Settings → Access Tokens → New token (тип **Write**).
+3. В GitHub-репозитории: Settings → Secrets and variables → Actions:
+   - Secrets → `HF_TOKEN` = токен;
+   - Variables → `HF_SPACE` = `ваш_логин/имя_space`.
+4. Actions → Deploy to Hugging Face → Re-run (или любой push). Сборка ~10 мин, ссылка: `https://huggingface.co/spaces/ваш_логин/имя_space`.
 
 ## Локальный запуск
 
