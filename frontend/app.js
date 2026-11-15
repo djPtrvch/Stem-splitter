@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const STEM_LABELS = { vocals: "Вокал", drums: "Барабаны", bass: "Бас", other: "Прочее",
+const STEM_LABELS = { original: "Весь звук", vocals: "Вокал", drums: "Барабаны", bass: "Бас", other: "Прочее",
   guitar: "Гитара", piano: "Пианино", no_vocals: "Минус" };
 
 let file = null, job = null;
@@ -25,6 +25,7 @@ async function init() {
   $("format").onchange = (e) => document.querySelectorAll(".stem select").forEach((s) => (s.value = e.target.value));
   $("zip").onclick = () => { location.href = `api/jobs/${job.id}/zip?format=${$("format").value}`; };
   $("video-dl").onclick = downloadVideo;
+  $("audio-dl").onclick = () => { location.href = `api/jobs/${job.id}/audio?format=${$("format").value}`; };
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" && tracks.length && e.target.tagName !== "SELECT") { e.preventDefault(); $("play").click(); }
   });
@@ -97,6 +98,11 @@ async function loadStems() {
   const video = $("video");
   video.classList.toggle("hidden", !job.has_video);
   $("video-dl").classList.toggle("hidden", !job.has_video);
+  const extractOnly = job.model === "extract";
+  $("zip").classList.toggle("hidden", extractOnly);
+  if (extractOnly) $("video-dl").classList.add("hidden");
+  $("audio-dl").textContent = extractOnly ? "Скачать звук" : "Скачать исходный звук";
+  $("audio-dl").className = extractOnly ? "" : "ghost";
   if (job.has_video) {
     video.src = `api/jobs/${job.id}/source`;
     video.onclick = () => $("play").click();

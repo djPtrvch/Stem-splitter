@@ -29,7 +29,7 @@ button.toggle.mute.on { background:#d9534f; border-color:#d9534f; }
 #time { color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .stem { display:grid; grid-template-columns: 90px auto 1fr auto; gap:10px; align-items:center;
   padding:8px 0; border-top:1px solid var(--line); }
-.stem .name { font-weight:600; text-transform:capitalize; }
+.stem .name { font-weight:600; }
 .stem .btns { display:flex; gap:4px; }
 .stem canvas { width:100%; height:40px; display:block; }
 .stem .side { display:flex; gap:6px; align-items:center; }

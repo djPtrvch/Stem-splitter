@@ -12,6 +12,7 @@ MODELS = {
     "htdemucs_ft": {"label": "4 стема, выше качество (медленнее)", "stems": ["vocals", "drums", "bass", "other"]},
     "htdemucs_6s": {"label": "6 стемов: + гитара, пианино", "stems": ["vocals", "drums", "bass", "guitar", "piano", "other"]},
     "vocals": {"label": "2 стема: вокал / минус", "stems": ["vocals", "no_vocals"]},
+    "extract": {"label": "Без разделения — только извлечь звук", "stems": ["original"]},
 }
 
 FORMATS = {
@@ -28,6 +29,11 @@ FAKE = os.environ.get("STEM_SPLITTER_FAKE") == "1"  # режим для тест
 def separate(src: Path, out_dir: Path, model: str, on_progress: Callable[[float], None]) -> dict[str, Path]:
     """Делит src на стемы, кладёт WAV в out_dir. Возвращает {имя_стема: путь}."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    if model == "extract":  # просто звуковая дорожка целиком
+        dst = out_dir / "original.wav"
+        shutil.copyfile(src, dst)
+        on_progress(99)
+        return {"original": dst}
     if FAKE:
         return _fake_separate(src, out_dir, model, on_progress)
 

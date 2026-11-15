@@ -168,6 +168,19 @@ def get_zip(job_id: str, format: str = "wav", stems: str | None = None):
                              headers={"Content-Disposition": f"attachment; filename*=UTF-8''{fname}"})
 
 
+@app.get("/api/jobs/{job_id}/audio")
+def get_audio(job_id: str, format: str = "wav"):
+    """Исходная звуковая дорожка целиком (без разделения) в нужном формате."""
+    job = _job(job_id)
+    if job["status"] != "done":
+        raise HTTPException(404, "Задача ещё не готова")
+    if format not in FORMATS:
+        raise HTTPException(400, "Неизвестный формат")
+    path = convert(DATA / job_id / "input.wav", format)
+    return FileResponse(path, media_type=FORMATS[format]["mime"],
+                        filename=f"{job['name']}.{FORMATS[format]['ext']}")
+
+
 @app.get("/api/jobs/{job_id}/source")
 def get_source(job_id: str):
     """Оригинальный загруженный файл (для превью видео)."""
