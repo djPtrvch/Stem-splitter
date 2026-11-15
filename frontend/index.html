@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stem Splitter</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Stem Splitter</h1>
+
+  <section id="upload" class="card">
+    <label id="drop" for="file">
+      <input type="file" id="file" accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aac,.opus,.aiff">
+      <span id="drop-text">Перетащите трек сюда или нажмите, чтобы выбрать</span>
+    </label>
+    <div class="row">
+      <label>Модель <select id="model"></select></label>
+      <button id="start" disabled>Разделить</button>
+    </div>
+  </section>
+
+  <section id="progress" class="card hidden">
+    <div id="status">Загрузка…</div>
+    <div class="bar"><div id="bar-fill"></div></div>
+  </section>
+
+  <section id="result" class="card hidden">
+    <div class="row head">
+      <h2 id="track-name"></h2>
+      <button id="new" class="ghost">Новый трек</button>
+    </div>
+    <div class="transport">
+      <button id="play" disabled>▶</button>
+      <span id="time">0:00 / 0:00</span>
+      <input type="range" id="seek" min="0" max="1000" value="0" disabled>
+    </div>
+    <div id="stems"></div>
+    <div class="row export">
+      <label>Формат <select id="format"></select></label>
+      <button id="zip">Скачать все стемы (ZIP)</button>
+    </div>
+  </section>
+
+  <p id="error" class="error hidden"></p>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
