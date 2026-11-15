@@ -19,6 +19,17 @@ pinned: false
 - Для видео: превью синхронно с плеером и экспорт **MP4 со звуком из выбранных стемов** (учитывает Mute/Solo и громкость; например, видео без вокала)
 - Скачивание каждого стема или всех сразу (ZIP) в **WAV, FLAC, MP3 320, OGG, M4A**
 
+## Запуск в GitHub Codespaces (в браузере, в том числе с iPad)
+
+[![Открыть в Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/djPtrvch/Stem-splitter?quickstart=1&ref=claude%2Fnice-ptolemy-i2vz94)
+
+Нажмите кнопку → **Create codespace** (в следующие разы — **Resume**). Сервер запустится сам, приложение откроется в новой вкладке.
+Если вкладка не открылась: внизу вкладка **PORTS** → строка *Stem Splitter (8000)* → иконка 🌐.
+
+- Первый запуск ~5 минут (установка PyTorch и модели), дальше — ~30 секунд.
+- Codespace сам засыпает после 30 минут бездействия (меняется в github.com/settings/codespaces → *Default idle timeout*).
+- Бесплатно: 120 core-часов в месяц (≈ 60 часов работы на 2-ядерной машине).
+
 ## Запуск через Docker
 
 ```bash

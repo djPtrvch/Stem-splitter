@@ -19,5 +19,5 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_SPACE: ${{ vars.HF_SPACE }}
         run: |
-          if [ -z "$HF_TOKEN" ] || [ -z "$HF_SPACE" ]; then echo "Задайте HF_TOKEN и HF_SPACE"; exit 1; fi
+          if [ -z "$HF_TOKEN" ] || [ -z "$HF_SPACE" ]; then echo "::notice::HF_TOKEN/HF_SPACE не заданы — публикация пропущена"; exit 0; fi
           git push --force "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" HEAD:main

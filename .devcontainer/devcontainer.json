@@ -1,0 +1,16 @@
+{
+  "name": "Stem Splitter",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "hostRequirements": { "cpus": 2, "memory": "8gb" },
+  // один раз при создании: ffmpeg, PyTorch (CPU), Demucs и веса модели
+  "onCreateCommand": "bash .devcontainer/setup.sh",
+  // при каждом пробуждении: запускаем сервер в фоне
+  "postStartCommand": "bash .devcontainer/start.sh",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": { "label": "Stem Splitter", "onAutoForward": "openBrowser" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": [".devcontainer/HOWTO.md"] }
+  }
+}
