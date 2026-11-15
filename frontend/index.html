@@ -12,8 +12,8 @@
 
   <section id="upload" class="card">
     <label id="drop" for="file">
-      <input type="file" id="file" accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aac,.opus,.aiff">
-      <span id="drop-text">Перетащите трек сюда или нажмите, чтобы выбрать</span>
+      <input type="file" id="file" accept="audio/*,video/*,.mkv,.mov,.webm,.mp3,.wav,.flac,.ogg,.m4a,.aac,.opus,.aiff">
+      <span id="drop-text">Перетащите трек или видео сюда или нажмите, чтобы выбрать</span>
     </label>
     <div class="row">
       <label>Модель <select id="model"></select></label>
@@ -31,6 +31,7 @@
       <h2 id="track-name"></h2>
       <button id="new" class="ghost">Новый трек</button>
     </div>
+    <video id="video" class="hidden" muted playsinline></video>
     <div class="transport">
       <button id="play" disabled>▶</button>
       <span id="time">0:00 / 0:00</span>
@@ -40,6 +41,7 @@
     <div class="row export">
       <label>Формат <select id="format"></select></label>
       <button id="zip">Скачать все стемы (ZIP)</button>
+      <button id="video-dl" class="hidden" title="Видео со звуком из включённых стемов (учитывает Mute/Solo и громкость)">Скачать видео с текущим миксом</button>
     </div>
   </section>
 

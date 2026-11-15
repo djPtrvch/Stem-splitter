@@ -2,9 +2,10 @@
 
 Веб-приложение для разделения трека на стемы (вокал, барабаны, бас, гитара, пианино, прочее) на базе [Demucs](https://github.com/adefossez/demucs).
 
-- Загрузка любого аудио (mp3, wav, flac, ogg, m4a…) — drag & drop
+- Загрузка любого аудио (mp3, wav, flac, ogg, m4a…) **или видео** (mp4, mov, mkv, webm, avi…) — drag & drop
 - Модели: 4 стема, 4 стема HQ, 6 стемов, вокал/минус
 - Встроенный мультитрек-плеер: синхронное воспроизведение, Mute/Solo, громкость, волновые формы, перемотка (пробел — play/pause)
+- Для видео: превью синхронно с плеером и экспорт **MP4 со звуком из выбранных стемов** (учитывает Mute/Solo и громкость; например, видео без вокала)
 - Скачивание каждого стема или всех сразу (ZIP) в **WAV, FLAC, MP3 320, OGG, M4A**
 
 ## Запуск через Docker
@@ -33,7 +34,7 @@ uvicorn backend.app:app --port 8000
 | Переменная | По умолчанию | Описание |
 |---|---|---|
 | `STEM_SPLITTER_DATA` | `./data` | Папка для загрузок и стемов |
-| `STEM_SPLITTER_MAX_MB` | `200` | Макс. размер файла |
+| `STEM_SPLITTER_MAX_MB` | `1024` | Макс. размер файла, МБ |
 | `STEM_SPLITTER_TTL_HOURS` | `24` | Через сколько часов удалять результаты |
 | `STEM_SPLITTER_WORKERS` | `1` | Сколько треков обрабатывать параллельно |
 | `STEM_SPLITTER_FAKE` | — | `1` — фейковое разделение фильтрами ffmpeg (для разработки без Demucs) |
@@ -53,4 +54,6 @@ frontend/             HTML/CSS/JS: загрузка, плеер, экспорт
 - `GET /api/jobs/{id}` — статус и прогресс
 - `GET /api/jobs/{id}/stems/{stem}?format=mp3&download=true` — стем
 - `GET /api/jobs/{id}/zip?format=flac` — все стемы архивом
+- `GET /api/jobs/{id}/video?stems=drums,bass&volumes=1,0.8` — MP4 с миксом стемов (только для видео)
+- `GET /api/jobs/{id}/source` — исходный файл
 - `DELETE /api/jobs/{id}` — удалить

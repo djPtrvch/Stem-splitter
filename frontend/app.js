@@ -24,6 +24,7 @@ async function init() {
   $("seek").oninput = (e) => seek((e.target.value / 1000) * duration);
   $("format").onchange = (e) => document.querySelectorAll(".stem select").forEach((s) => (s.value = e.target.value));
   $("zip").onclick = () => { location.href = `api/jobs/${job.id}/zip?format=${$("format").value}`; };
+  $("video-dl").onclick = downloadVideo;
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" && tracks.length && e.target.tagName !== "SELECT") { e.preventDefault(); $("play").click(); }
   });
@@ -93,6 +94,13 @@ async function loadStems() {
     return { name, buffer, gain, volume: 1, mute: false, solo: false, src: null };
   }));
   duration = Math.max(...tracks.map((t) => t.buffer.duration));
+  const video = $("video");
+  video.classList.toggle("hidden", !job.has_video);
+  $("video-dl").classList.toggle("hidden", !job.has_video);
+  if (job.has_video) {
+    video.src = `api/jobs/${job.id}/source`;
+    video.onclick = () => $("play").click();
+  } else video.removeAttribute("src");
   tracks.forEach(renderStem);
   $("play").disabled = $("seek").disabled = false;
   updateTime();
@@ -173,6 +181,7 @@ function play() {
   }
   applyGains();
   playing = true;
+  if (job.has_video) { $("video").currentTime = offset; $("video").play().catch(() => {}); }
   $("play").textContent = "⏸";
   tick();
 }
@@ -183,6 +192,7 @@ function pause() {
   offset = currentTime();
   stopSources();
   playing = false;
+  if (job?.has_video) $("video").pause();
   $("play").textContent = "▶";
   cancelAnimationFrame(raf);
   redraw();
@@ -192,13 +202,44 @@ function seek(sec) {
   const was = playing;
   if (playing) { stopSources(); playing = false; }
   offset = Math.max(0, Math.min(duration, sec));
+  if (!was && job.has_video) $("video").currentTime = offset;
   was ? play() : redraw();
 }
 
 function tick() {
   if (currentTime() >= duration) { pause(); offset = duration; redraw(); return; }
   redraw();
+  syncVideo();
   raf = requestAnimationFrame(tick);
+}
+
+// видео без звука, ведущий — Web Audio; подтягиваем видео при рассинхроне
+function syncVideo() {
+  const v = $("video");
+  if (!job?.has_video || v.readyState < 2) return;
+  if (Math.abs(v.currentTime - currentTime()) > 0.15) v.currentTime = currentTime();
+}
+
+function downloadVideo() {
+  const anySolo = tracks.some((t) => t.solo);
+  const on = tracks.filter((t) => !t.mute && (!anySolo || t.solo) && t.volume > 0);
+  if (!on.length) return showError("Включите хотя бы один стем");
+  showError("");
+  const btn = $("video-dl");
+  btn.disabled = true;
+  btn.textContent = "Собираю видео…";
+  const url = `api/jobs/${job.id}/video?stems=${on.map((t) => t.name).join(",")}&volumes=${on.map((t) => t.volume).join(",")}`;
+  fetch(url).then(async (r) => {
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `Ошибка ${r.status}`);
+    const blob = await r.blob();
+    const name = decodeURIComponent((r.headers.get("content-disposition") || "").match(/filename\*?=(?:UTF-8'')?"?([^";]+)/i)?.[1] || "video.mp4");
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: name });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }).catch((e) => showError(e.message)).finally(() => {
+    btn.disabled = false;
+    btn.textContent = "Скачать видео с текущим миксом";
+  });
 }
 
 function redraw() { updateTime(); tracks.forEach(drawWave); }
@@ -215,6 +256,7 @@ function reset() {
   if (playing) pause();
   if (job) fetch(`api/jobs/${job.id}`, { method: "DELETE" });
   tracks.forEach((t) => t.gain.disconnect());
+  $("video").pause(); $("video").removeAttribute("src"); $("video").load();
   tracks = []; job = null; offset = 0; duration = 0;
   $("result").classList.add("hidden");
   $("upload").classList.remove("hidden");
