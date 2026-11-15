@@ -2,7 +2,7 @@
 # Запуск сервера в фоне (вызывается при каждом старте/пробуждении Codespace).
 cd "$(dirname "$0")/.."
 if [ ! -f "$HOME/.stem-setup-done" ] || ! command -v ffmpeg > /dev/null \
-   || ! python -c "import demucs, fastapi" 2>/dev/null; then
+   || ! python -c "import numpy, demucs.separate, fastapi" 2>/dev/null; then
   echo "Устанавливаю зависимости (несколько минут)…"
   bash .devcontainer/setup.sh
 fi
